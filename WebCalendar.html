@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>3 hónap egymás mellett (hetek szerint)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 24px; color: #111; }
+    h1 { margin: 0 0 14px; font-size: 18px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(260px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .monthCard {
+      border: 1px solid #e6e6e6;
+      border-radius: 14px;
+      padding: 12px;
+      background: #fff;
+      box-shadow: 0 1px 10px rgba(0,0,0,0.04);
+    }
+
+    .monthTitle {
+      font-weight: 700;
+      margin: 2px 0 10px;
+      font-size: 14px;
+      color: #222;
+    }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    thead th {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 650;
+      color: #333;
+      padding: 8px 6px;
+      border-bottom: 1px solid #eaeaea;
+      background: #fff;
+      position: sticky;
+      top: 0;
+    }
+
+    thead th:first-child, tbody th {
+      text-align: left;
+      width: 72px;
+      padding-left: 8px;
+    }
+
+    tbody th, tbody td {
+      border-bottom: 1px solid #f0f0f0;
+      padding: 8px 6px;
+      height: 34px;
+    }
+
+    tbody th {
+      font-size: 11px;
+      color: #444;
+      font-weight: 650;
+      background: #fff;
+      position: sticky;
+      left: 0;
+    }
+
+    td {
+      text-align: center;
+      font-size: 13px;
+      border-left: 1px solid #f6f6f6;
+    }
+    tr td:first-of-type { border-left: none; }
+
+    /* Weekend piros */
+    td.weekend, thead th.weekend { color: #c40000; }
+
+    /* Mai nap szürke háttér */
+    td.today {
+      background: #e6e6e6;
+      font-weight: 800;
+      border-radius: 10px;
+    }
+
+    /* Üres napok */
+    td.empty { color: transparent; }
+
+    .controls { margin: 0 0 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+    }
+    button:hover { background: #f6f6f6; }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      tbody th { position: static; }
+      thead th { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <h1>3 hónap egymás mellett</h1>
+
+  <div class="controls">
+    <button id="prev">◀ Vissza (középső hónap -1)</button>
+    <button id="todayBtn">Ma</button>
+    <button id="next">Előre (középső hónap +1) ▶</button>
+  </div>
+
+  <div class="grid">
+    <section class="monthCard">
+      <div class="monthTitle" id="titlePrev"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hét</th>
+            <th>H</th><th>K</th><th>Sze</th><th>Cs</th><th>P</th>
+            <th class="weekend">Szo</th>
+            <th class="weekend">V</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyPrev"></tbody>
+      </table>
+    </section>
+
+    <section class="monthCard">
+      <div class="monthTitle" id="titleCur"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hét</th>
+            <th>H</th><th>K</th><th>Sze</th><th>Cs</th><th>P</th>
+            <th class="weekend">Szo</th>
+            <th class="weekend">V</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyCur"></tbody>
+      </table>
+    </section>
+
+    <section class="monthCard">
+      <div class="monthTitle" id="titleNext"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hét</th>
+            <th>H</th><th>K</th><th>Sze</th><th>Cs</th><th>P</th>
+            <th class="weekend">Szo</th>
+            <th class="weekend">V</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyNext"></tbody>
+      </table>
+    </section>
+  </div>
+
+<script>
+(() => {
+  const huMonths = [
+    "január","február","március","április","május","június",
+    "július","augusztus","szeptember","október","november","december"
+  ];
+
+  const pad2 = n => String(n).padStart(2, "0");
+
+  // Monday-based day index: Mon=0 ... Sun=6
+  function dowMon0(date) {
+    const d = date.getDay(); // Sun=0..Sat=6
+    return (d + 6) % 7;
+  }
+
+  function startOfDay(d) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  function addDays(d, days) {
+    const x = new Date(d);
+    x.setDate(x.getDate() + days);
+    return x;
+  }
+
+  function sameYMD(a, b) {
+    return a.getFullYear() === b.getFullYear() &&
+           a.getMonth() === b.getMonth() &&
+           a.getDate() === b.getDate();
+  }
+
+  // ISO week number (and ISO week-year)
+  function isoWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7; // Mon=1..Sun=7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    const weekYear = d.getUTCFullYear();
+    return { weekNo, weekYear };
+  }
+
+  function monthLabel(y, m) {
+    return `${y}. ${huMonths[m]}`;
+  }
+
+  // Render one month: full weeks (Mon..Sun), empty cells outside month
+  function renderMonth(year, month, titleElId, tbodyId, today) {
+    document.getElementById(titleElId).textContent = monthLabel(year, month);
+
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = "";
+
+    const first = new Date(year, month, 1);
+    const last  = new Date(year, month + 1, 0);
+
+    const startAligned = addDays(first, -dowMon0(first));          // Monday
+    const endAligned   = addDays(last, (6 - dowMon0(last)));      // Sunday
+
+    for (let weekStart = new Date(startAligned); weekStart <= endAligned; weekStart = addDays(weekStart, 7)) {
+      const tr = document.createElement("tr");
+
+      const { weekNo, weekYear } = isoWeekNumber(weekStart);
+      const th = document.createElement("th");
+      th.textContent = `${weekYear}/${pad2(weekNo)}`;
+      tr.appendChild(th);
+
+      for (let i = 0; i < 7; i++) {
+        const d = addDays(weekStart, i);
+        const td = document.createElement("td");
+
+        const inThisMonth = (d.getFullYear() === year && d.getMonth() === month);
+        if (!inThisMonth) {
+          td.className = "empty";
+          td.textContent = "0"; // láthatatlan (color: transparent)
+        } else {
+          td.textContent = String(d.getDate());
+          if (i >= 5) td.classList.add("weekend"); // Sat/Sun piros
+          if (sameYMD(d, today)) td.classList.add("today"); // ma szürke
+        }
+
+        tr.appendChild(td);
+      }
+
+      tbody.appendChild(tr);
+    }
+  }
+
+  // State: center month
+  let center = new Date();
+  center = new Date(center.getFullYear(), center.getMonth(), 1);
+
+  function rerender() {
+    const today = startOfDay(new Date());
+
+    const prev = new Date(center.getFullYear(), center.getMonth() - 1, 1);
+    const next = new Date(center.getFullYear(), center.getMonth() + 1, 1);
+
+    renderMonth(prev.getFullYear(), prev.getMonth(), "titlePrev", "tbodyPrev", today);
+    renderMonth(center.getFullYear(), center.getMonth(), "titleCur", "tbodyCur", today);
+    renderMonth(next.getFullYear(), next.getMonth(), "titleNext", "tbodyNext", today);
+  }
+
+  document.getElementById("prev").addEventListener("click", () => {
+    center = new Date(center.getFullYear(), center.getMonth() - 1, 1);
+    rerender();
+  });
+
+  document.getElementById("next").addEventListener("click", () => {
+    center = new Date(center.getFullYear(), center.getMonth() + 1, 1);
+    rerender();
+  });
+
+  document.getElementById("todayBtn").addEventListener("click", () => {
+    const t = new Date();
+    center = new Date(t.getFullYear(), t.getMonth(), 1);
+    rerender();
+  });
+
+  rerender();
+})();
+</script>
+</body>
+</html>
